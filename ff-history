@@ -1,0 +1,118 @@
+#!/bin/bash
+set -euo pipefail
+
+cur_dir="$(dirname "$(readlink -f "${BASH_SOURCE[0]:-.}")")"
+source "${cur_dir}/common.sh"
+
+SQLITE_SRC_DB="${HOME}/.mozilla/firefox/2s9jfb8w.dev-edition-default/places.sqlite"
+SQLITE_TMP_DB=/tmp/ff-hist.sqlite.db
+
+cleanup() {
+  local rc="$?"
+  set +e
+  rm -f "$SQLITE_TMP_DB"
+  if (($rc)) && [[ -z "$⅞WINDOWID:-" ]]; then
+    dunstify -u critical ff-history "got error ${rc}. please check on command line"
+  fi
+  exit $rc
+}
+trap cleanup EXIT
+
+
+# TODO: allow 'url:x' and 'title:x' to limit search.
+# Search by url/title, or show everything.
+get-content() {
+  local cmd="$1"
+  local condition="${2:-}"
+  if [[ -z "$condition" ]]; then
+    local where=''
+  else
+    local condition="${condition// /%}"
+    local where=" and (url like '%${condition}%' or title like '%${condition}%')"
+  fi
+  cp  "$SQLITE_SRC_DB" "$SQLITE_TMP_DB"
+  local query='
+    select
+      strftime("%Y-%m-%d", datetime(substr(last_visit_date, 0, 11), "unixepoch")) as last_visit,
+      title,
+      trim(replace(replace(url, "https://", ""), "http://", "")) as url
+    from
+      moz_places
+    where
+      url not like "%duckduckgo.com%"
+      and url not like "%google.com%"'"${where} order by last_visit_date desc"
+  if [[ "$cmd" = fzf ]]; then
+    local title_width=$(( ($(tput cols) - 28) / 2))
+    local url_width="$title_width"
+  else
+    local title_width=60
+    local url_width=250
+  fi
+  sqlite3 -init /dev/null -column -cmd ".width 11 ${title_width} ${url_width}" "$SQLITE_TMP_DB" "$query" 2>/dev/null
+}
+
+get-url() {
+  local cmd="$1"
+  local filter_cmd=()
+  case "$cmd" in
+    fzf) filter_cmd+=(fzf)
+      ;;
+    rofi) filter_cmd+=(rofi -fullscreen -theme-str "* { font: \"Hack 12px\"; } #mainbox { margin: 0; padding: 1%; }" -i -dmenu -p history)
+  esac
+  local condition="$2"
+  local line="$(get-content "$cmd" "$condition" \
+                | "${filter_cmd[@]}")"
+  if [[ -z "$line" ]]; then
+    exit
+  fi
+  echo "$line" | awk '{print "https://" $NF}'
+}
+
+main() {
+  if [[ -z "${WINDOWID:-}" ]]; then
+    local cmd=rofi
+    local do_browse=1
+  else
+    local cmd=fzf
+    local do_browse=0
+  fi
+  while (($#)); do
+    case "$1" in
+      --fzf|--rofi) local cmd="${1:2}"
+        ;;
+      --browse) local do_browse=1
+        ;;
+      --)
+        shift
+        local condition="$@"
+        ;;
+      *) local condition="$1"
+    esac
+    shift
+  done
+  if [[ -z "${condition:-}" ]]; then
+    local condition="$(common.get-and-cache-input 'url filter')"
+    if [[ -z "$condition" ]]; then
+      exit
+    fi
+  fi
+  if [[ -z "${condition:-}" ]]; then
+    echo '[ERROR] filter condition must be specified' >&2
+    dunstify -u critical ff-history 'filter condition must be specified'
+    exit 1
+  fi
+  local url="$(get-url "$cmd" "$condition")"
+  if (($do_browse)); then
+    set +e
+    xdg-open "$url" 2>&1 &
+    disown
+    xdotool set_desktop 14
+    qtile-cmd -o cmd -f next_urgent
+  else
+    echo "$url"
+  fi
+}
+
+main "$@"
+
+# vim: ft=bash

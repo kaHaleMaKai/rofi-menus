@@ -1,0 +1,38 @@
+#!/bin/bash
+set -euo pipefail
+
+
+main() {
+  local cur_dir="$(dirname "$(readlink -f "${BASH_SOURCE[0]:-.}")")"
+  local find_args=(
+    find "$cur_dir" -type f
+  )
+  if ! nmcli connection show --active | grep -q 'wifi\|ethernet\|usb'; then
+    find_args+=( \( -name 'rofi-*-menu' -a \! -name rofi-vpn-menu \) )
+  else
+    find_args+=( -name 'rofi-*-menu' )
+  fi
+  find_args+=( -printf '%f\n' )
+  local submenu="$(
+    {
+      "${find_args[@]}"
+      echo ff-history
+    } \
+    | sed 's/\(rofi-\|-menu\)//g' \
+    | sort \
+    | rofi -i -dmenu -p 'menu'
+  )"
+  if [[ -z "$submenu" ]]; then
+    exit
+  fi
+  local script="${cur_dir}/rofi-${submenu}-menu"
+  if [[ ! -f "$script" ]]; then
+    dunstify -u critical 'rofi-menu' "sub-menu '${submenu}' unknown"
+    exit 1
+  fi
+  exec "$script"
+}
+
+main "$@"
+
+# vim: ft=sh

@@ -1,0 +1,18 @@
+#!/bin/bash
+set -euo pipefail
+
+main() {
+  local proc="$(compgen -c \
+                | grep -v '^[^a-zA-Z0-9]\+$' \
+                | sort \
+                | uniq \
+                | rofi -i -cache-dir ~/.cache -dmenu -p 'terminal')"
+  if [[ -z "$proc" ]]; then
+    exit
+  fi
+  xfce4-terminal --role "$proc" --title "$proc" --execute zsh -c "${proc}"
+}
+
+main "$@"
+
+# vim: ft=sh

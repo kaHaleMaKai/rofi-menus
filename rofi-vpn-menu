@@ -1,0 +1,45 @@
+#!/bin/bash
+set -euo pipefail
+
+cur_dir="$(dirname "$(readlink -f "${BASH_SOURCE[0]:-.}")")"
+source "${cur_dir}/common.sh"
+
+is-vpn-active() {
+  local name="$1"
+  nmcli connection show --active \
+  | grep -q "^${name} .*vpn "
+}
+
+get-vpns() {
+  while read -r vpn; do
+    if is-vpn-active "$vpn"; then
+      echo "<b>${vpn};✔</b>"
+    else
+      echo "$vpn"
+    fi
+  done < <(nmcli connection show \
+           | awk '/^NAME/{next} $3 ~ /vpn/ {print $1}')
+}
+
+main() {
+  local vpn="$(get-vpns \
+               | column -t -s';' \
+               | common.get-input-with-markup vpn)"
+  if [[ -z "$vpn" ]]; then
+    exit
+  fi
+  if ! nmcli connection show "$vpn" >/dev/null 2>&1; then
+    dunstify -u critical 'rofi-vpn-menu' "got unknown vpn name: '${vpn}'"
+    exit 1
+  fi
+  if is-vpn-active "$vpn"; then
+    local action=down
+  else
+    local action=up
+  fi
+  nmcli connection "$action" "$vpn"
+}
+
+main "$@"
+
+# vim: ft=sh

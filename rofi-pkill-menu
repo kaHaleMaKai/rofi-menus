@@ -1,0 +1,17 @@
+#!/bin/bash
+set -euo pipefail
+
+main() {
+  while :; do
+    local proc="$(ps -ahxo 'comm' | sort | uniq \
+                  | rofi -i -dmenu -p 'pkill')"
+    if [[ -z "$proc" ]]; then
+      exit
+    fi
+    pkill "$proc"
+  done
+}
+
+main "$@"
+
+# vim: ft=sh

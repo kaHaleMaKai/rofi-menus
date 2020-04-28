@@ -1,0 +1,64 @@
+#!/bin/bash
+set -euo pipefail
+
+cur_dir="$(dirname "$(readlink -f "${BASH_SOURCE[0]:-.}")")"
+source "${cur_dir}/common.sh"
+
+get-active-wifi() {
+  nmcli connection show --active \
+  | sed -n '/wifi/ s/^\(.*[ ]\)\([0-9a-z]\+-[0-9a-z]\+-[-0-9a-z]\+\)\( .*\)/\2/ p'
+}
+
+disable-active-connection() {
+  local active_connection="$(get-active-wifi)"
+  if [[ -n "$active_connection" ]]; then
+    nmcli connection down "$active_connection"
+  fi
+}
+
+get-wifis() {
+  nmcli dev wifi \
+  | awk '/^IN-USE/ { next }
+         /^\*/     { gsub("^.[[:space:]]+|[[:space:]]+$", "")
+                     used="<b>"$0 " ✔</b>"
+                     next }
+                   { gsub("^[[:space:]]+|[[:space:]]+$", "")
+                     s[i]=$0
+                     i+=1 }
+         END { print used
+               for (j in s) {
+                 print s[j] } }'
+}
+
+main() {
+  local wifis="$(get-wifis)"
+  local wifi="$(echo "${wifis}" | common.get-input-with-markup wifi)"
+  if [[ -z "$wifi" ]]; then
+    exit
+  fi
+  while read -r line; do
+    if [[ "$line" != *"${wifi}"* ]]; then
+      continue
+    else
+      if [[ "$line" = *'✔' ]]; then
+        disable-active-connection
+        exit
+      else
+        local action='up'
+      fi
+      break
+    fi
+    if [[ -z "${action:-}" ]]; then
+      dunstify -u critical 'rofi-wifi-menu' "unknown connection: '${wifi}'"
+      exit 1
+    fi
+  done <<< "$wifis"
+  local active="$(get-active-wifi)"
+  disable-active-connection
+  local ssid="${line// *}"
+  nmcli device wifi connect "$ssid"
+}
+
+main "$@"
+
+# vim: ft=sh

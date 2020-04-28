@@ -1,0 +1,37 @@
+#!/bin/bash
+set -euo pipefail
+
+sys='/sys/class/backlight/intel_backlight'
+max_brightness="$(<"${sys}/max_brightness")"
+
+get-percent() {
+  local val="$1"
+  if [[ -z "$val" ]]; then
+    exit
+  fi
+  echo "$(( (${val//%} * max_brightness) / 100 ))"
+}
+
+main() {
+  local val="$(rofi -dmenu -lines 1 -p 'brightness')"
+  if [[ ("$val" = +*) || ("$val" = -*) ]]; then
+    local current="$(< "${sys}/brightness")"
+    local increment="$(get-percent "$val")"
+    local brightness="$(( current + increment ))"
+  else
+    local brightness="$(get-percent "$val")"
+  fi
+
+  if [[ -z "$brightness" ]]; then
+    return
+  elif (( brightness < 1 )); then
+    local brightness=1
+  elif (( brightness > max_brightness )); then
+    local brightness="$max_brightness"
+  fi
+  echo "$brightness" > "${sys}/brightness"
+}
+
+main "$@"
+
+# vim: ft=sh

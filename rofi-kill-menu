@@ -1,0 +1,24 @@
+#!/bin/bash
+set -euo pipefail
+
+cur_dir="$(dirname "$(readlink -f "${BASH_SOURCE[0]:-.}")")"
+source "${cur_dir}/common.sh"
+
+main() {
+  while :; do
+    local proc="$(ps -ahxo 'pid:8,start:10,comm:20,args' \
+                  | awk '{ if ($2 ~ "^[A-Z]") { i=4 } else { i=3 }
+                           $i = "<b>"$i"</b>"
+                           print $0 }' \
+                  | common.get-input-with-markup kill)"
+    if [[ -z "$proc" ]]; then
+      exit
+    fi
+    read -r pid more <<< "$proc"
+    kill "$pid"
+  done
+}
+
+main "$@"
+
+# vim: ft=sh
