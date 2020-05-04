@@ -40,7 +40,7 @@ get-content() {
       moz_places
     where
       url not like "%duckduckgo.com%"
-      and url not like "%google.com%"'"${where} order by last_visit_date desc"
+      and (url like "%cloud.google.com%" or url not like "%google.com%")'"${where} order by last_visit_date desc"
   if [[ "$cmd" = fzf ]]; then
     local title_width=$(( ($(tput cols) - 28) / 2))
     local url_width="$title_width"
