@@ -12,7 +12,10 @@ common.get-input-with-markup() {
 }
 
 common.get-and-cache-input() {
-  local rofi_prompt="$1"
+  local rofi_cmd=(rofi -i -dmenu -p "${1?expecting rofi-prompt text as 1st argument}")
+  if [[ "${2:-}" != --force-entry ]]; then
+    rofi_cmd+=(-kb-accept-entry '!Return,Ctrl-Return' -kb-accept-custom '!Ctrl-Return,Return')
+  fi
   local cache_file="${HOME}/.cache/rofi3.${_script_name}-cache"
   if [[ ! -f "$cache_file" ]]; then
     touch "$cache_file"
@@ -21,7 +24,7 @@ common.get-and-cache-input() {
   local value="$(
     echo "$cache" \
     | sed 's/^[0-9]*;//' \
-    | rofi -i -dmenu -p "$rofi_prompt"
+    | "${rofi_cmd[@]}"
   )"
   if [[ -n "$value" ]]; then
     { echo "1;${value}"; echo "$cache"; } \
